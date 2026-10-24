@@ -1,3 +1,5 @@
+from ssh_runner._platform import WINDOWS, archive_options
+
 """Regression coverage for safe log pages, process groups and directory archives."""
 
 import base64
@@ -98,27 +100,31 @@ class ArchiveTests(unittest.TestCase):
         (source / "a 'file").write_bytes(bytes(range(256)) * 100)
         (source / "a 'file").chmod(0o755)
         with tempfile.TemporaryFile() as stream:
-            archive.pack_directory(source, stream)
-            data = archive.unpack_directory(stream, self.root / "destination")
+            archive.pack_directory(source, stream, **archive_options("pack"))
+            data = archive.unpack_directory(
+                stream, self.root / "destination", **archive_options("unpack")
+            )
         target = self.root / "destination"
         self.assertEqual(
             (target / "a 'file").read_bytes(), (source / "a 'file").read_bytes()
         )
-        self.assertEqual((target / "a 'file").stat().st_mode & 0o777, 0o755)
+        if not WINDOWS:
+            self.assertEqual((target / "a 'file").stat().st_mode & 0o777, 0o755)
         self.assertTrue((target / "空目录").is_dir())
         self.assertEqual(data["files"], 1)
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX links/FIFOs/rename")
     def test_symlinks_and_fifos_rejected_when_packing(self):
         source = self.root / "source"
         source.mkdir()
         link = source / "link"
         link.symlink_to(self.root)
         with tempfile.TemporaryFile() as stream, self.assertRaises(ValueError):
-            archive.pack_directory(source, stream)
+            archive.pack_directory(source, stream, **archive_options("pack"))
         link.unlink()
         os.mkfifo(link)
         with tempfile.TemporaryFile() as stream, self.assertRaises(ValueError):
-            archive.pack_directory(source, stream)
+            archive.pack_directory(source, stream, **archive_options("pack"))
 
     def test_hostile_archives_never_escape_or_publish(self):
         for name, kind in (
@@ -141,6 +147,7 @@ class ArchiveTests(unittest.TestCase):
                 self.assertFalse((self.root / "escape").exists())
                 self.assertFalse(list(self.root.glob(".ssh-directory-*")))
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX links/FIFOs/rename")
     def test_publication_refuses_existing_empty_directory_and_symlink(self):
         for symlink in (False, True):
             stage = self.root / "stage"
@@ -171,6 +178,7 @@ class ArchiveTests(unittest.TestCase):
         self.assertFalse(target.exists())
 
 
+@unittest.skipUnless(os.name == "posix", "standalone remote worker requires POSIX")
 class WorkerTests(unittest.TestCase):
     def test_timeout_and_cancel_kill_descendants_after_shell_exits(self):
         for cancel in (False, True):
@@ -320,6 +328,9 @@ class ProtocolAndWaitTests(unittest.TestCase):
         self.assertEqual(result.data["next_offset"], 4)
 
     def test_doctor_stages_and_dependency_gaps(self):
+        self.executor.transport.process.run.return_value = subprocess.CompletedProcess(
+            [], 0, "", "OpenSSH_for_Windows_9.5p2"
+        )
         output = "SSH_RUNNER_DOCTOR_V1\nsh=1\ncat=1\nwc=1\ntr=1\nsha256sum=1\npython_supported=0\n"
         with mock.patch.object(
             self.executor.transport, "resolve_config"

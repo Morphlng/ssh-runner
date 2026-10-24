@@ -14,6 +14,7 @@ dependencies = []
 classifiers = [
     "Operating System :: POSIX",
     "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python :: 3",
 ]
 
@@ -24,6 +25,7 @@ Issues = "https://github.com/Morphlng/ssh-runner/issues"
 
 [project.scripts]
 ssh-runner = "ssh_runner.cli:run"
+ssh-runner-askpass = "ssh_runner.ssh.auth.askpass:main"
 
 [project.optional-dependencies]
 test = ["paramiko>=3,<5"]

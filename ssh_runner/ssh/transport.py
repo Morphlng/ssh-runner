@@ -4,11 +4,11 @@ import dataclasses
 import os
 import shutil
 import subprocess
-import tempfile
 from contextlib import ExitStack, nullcontext
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+from .._platform import WINDOWS, open_private, private_temporary_file
 from ..config import Config
 from ..core.defaults import DEFAULT_OUTPUT_BYTES
 from ..core.errors import ToolError
@@ -83,6 +83,12 @@ class OpenSSHTransport:
         """Separate master bootstrap from command clients; forbid mux fallback."""
         if operation not in {"command", "master", "inspect", "check", "exit"}:
             raise ValueError("unsupported SSH operation")
+        if WINDOWS and (
+            control_path is not None or operation in {"master", "check", "exit"}
+        ):
+            raise ToolError(
+                "Windows OpenSSH 不支持连接复用；请设置 reuse_connection=false 或使用 --no-reuse。"
+            )
         master = operation == "master"
         mux_only = control_path is not None and not master
         options = (
@@ -217,17 +223,20 @@ class OpenSSHTransport:
                     if target is None or hasattr(target, "write"):
                         return target
                     # Never truncate existing files or follow symlinks. Logs are private.
-                    fd = os.open(
-                        str(target), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600
-                    )
+                    fd = open_private(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
                     return stack.enter_context(os.fdopen(fd, "wb"))
 
                 out_file, err_file = output(stdout_file), output(stderr_file)
                 secret = tuple(value.encode("utf-8") for value in config.secrets)
                 out = Capture(max_output_bytes, secret, out_file, binary_stdout)
                 err = Capture(max_output_bytes, secret, err_file)
+                arguments = self.arguments(config, command, control_path=control_path)
+                if stdin is None:
+                    # Explicitly tell OpenSSH there is no command input. Win32
+                    # console/NUL handle behavior must not leave the channel open.
+                    arguments.insert(1, "-n")
                 process = self.process.spawn(
-                    self.arguments(config, command, control_path=control_path),
+                    arguments,
                     env=environment,
                     stdin=stdin if stdin is not None else subprocess.DEVNULL,
                     stdout=subprocess.PIPE,
@@ -269,7 +278,7 @@ class OpenSSHTransport:
                 askpass_environment(config, prompt_host)
                 if config.auth_mode != "key"
                 else nullcontext(clean_environment())
-            ) as environment, tempfile.TemporaryFile() as diagnostics:
+            ) as environment, private_temporary_file() as diagnostics:
                 process = self.process.spawn(
                     self.arguments(
                         config, control_path=control_path, operation="master"

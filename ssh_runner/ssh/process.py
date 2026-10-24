@@ -1,13 +1,19 @@
 """Bounded pipe draining and redaction, including secrets split across reads."""
 
 import os
+import queue
 import selectors
 import signal
 import subprocess
+import threading
 import time
 from typing import Tuple
 
+from .._platform import WINDOWS
 from ..core.defaults import STOP_GRACE_SECONDS
+
+PIPE_CHUNK_BYTES = 65536
+PIPE_QUEUE_CHUNKS = 8
 
 
 class Capture:
@@ -76,6 +82,9 @@ class Capture:
 
 
 def _signal_group(process: subprocess.Popen, signum: int) -> None:
+    if WINDOWS:
+        process.terminate_tree()
+        return
     try:
         os.killpg(process.pid, signum)
     except ProcessLookupError:
@@ -98,13 +107,35 @@ class ProcessRunner:
         self.grace = grace
 
     def run(self, *args, **kwargs):
+        if WINDOWS:
+            # Inspection/control subprocesses need the same tree ownership as exec.
+            timeout = kwargs.pop("timeout", None)
+            capture = kwargs.pop("capture_output", False)
+            if capture:
+                kwargs.update(stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            with self.spawn(*args, **kwargs) as process:
+                try:
+                    out, err = process.communicate(timeout=timeout)
+                except BaseException:
+                    process.terminate_tree()
+                    process.communicate(timeout=self.grace)
+                    raise
+                return subprocess.CompletedProcess(
+                    args[0], process.returncode, out, err
+                )
         return subprocess.run(*args, **kwargs)
 
     def spawn(self, *args, **kwargs):
+        if WINDOWS:
+            from .._platform.windows_process import WindowsProcess
+
+            return WindowsProcess(*args, **kwargs)
         return subprocess.Popen(*args, **kwargs)
 
     def drain(self, process, stdout, stderr, timeout):
         """Drain both pipes with bounded memory; also bound inherited pipe lifetimes."""
+        if WINDOWS:
+            return self._drain_windows(process, stdout, stderr, timeout)
         grace = self.grace
 
         deadline = time.monotonic() + timeout
@@ -157,8 +188,94 @@ class ProcessRunner:
                 stderr.feed(b"", final=True)
         return timed_out
 
+    def _drain_windows(self, process, stdout, stderr, timeout):
+        events = queue.Queue(maxsize=PIPE_QUEUE_CHUNKS)
+        stopping = threading.Event()
+
+        def send(event):
+            while not stopping.is_set():
+                try:
+                    events.put(event, timeout=0.05)
+                    return
+                except queue.Full:
+                    pass
+
+        def read(pipe, capture):
+            try:
+                while not stopping.is_set():
+                    chunk = pipe.read1(PIPE_CHUNK_BYTES)
+                    if not chunk:
+                        break
+                    send((capture, chunk, None))
+            except BaseException as error:
+                send((capture, None, error))
+            finally:
+                send((capture, None, None))
+
+        threads = [
+            threading.Thread(target=read, args=pair, name="ssh-runner-pipe")
+            for pair in ((process.stdout, stdout), (process.stderr, stderr))
+        ]
+        timed_out = False
+        deadline = time.monotonic() + timeout
+        done = 0
+        try:
+            for thread in threads:
+                thread.start()
+            while done < 2 or process.poll() is None:
+                if time.monotonic() >= deadline:
+                    timed_out = True
+                    process.terminate_tree()
+                    break
+                try:
+                    capture, data, error = events.get(timeout=0.05)
+                except queue.Empty:
+                    continue
+                if error is not None:
+                    raise error
+                if data is None:
+                    done += 1
+                else:
+                    capture.feed(data)
+            if timed_out:
+                # Killing the whole job closes inherited writer handles. Drain
+                # the bounded remainder so partial output/redaction stays valid.
+                until = time.monotonic() + self.grace
+                while done < 2 and time.monotonic() < until:
+                    try:
+                        capture, data, error = events.get(timeout=0.05)
+                    except queue.Empty:
+                        continue
+                    if error is not None:
+                        raise error
+                    if data is None:
+                        done += 1
+                    else:
+                        capture.feed(data)
+            process.wait(timeout=self.grace)
+        finally:
+            process.close_job()  # Also removes descendants after a successful exit.
+            stopping.set()
+            for thread in threads:
+                if thread.ident is not None:
+                    thread.join(timeout=self.grace)
+            for pipe in (process.stdout, process.stderr):
+                pipe.close()
+            if process.poll() is None:
+                process.kill()
+                process.wait(timeout=self.grace)
+            stdout.feed(b"", final=True)
+            stderr.feed(b"", final=True)
+        return timed_out
+
     def stop(self, process: subprocess.Popen) -> Tuple[str, str]:
         """Bound shutdown even if a detached descendant keeps an output pipe open."""
+        if WINDOWS:
+            try:
+                process.terminate_tree()
+                return process.communicate(timeout=self.grace)
+            finally:
+                process.close_job()
         _signal_group(process, signal.SIGTERM)
         try:
             return process.communicate(timeout=self.grace)

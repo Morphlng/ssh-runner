@@ -6,6 +6,7 @@ import os
 import re
 from typing import Mapping, Optional, Tuple
 
+from ..core.defaults import default_reuse_connection
 from ..core.errors import ConfigError
 
 MAX_CONFIG_BYTES = 65536
@@ -55,7 +56,7 @@ class Config:
     password: str = dataclasses.field(default="", repr=False)
     auth_mode: str = "password"
     password_prompt: str = ""
-    reuse_connection: bool = True
+    reuse_connection: bool = dataclasses.field(default_factory=default_reuse_connection)
     control_persist: int = 300
     server_alive_interval: int = 15
     server_alive_count_max: int = 3

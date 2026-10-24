@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 
+from .._platform import directory_link
 from ..core.errors import ToolError
 from ..resources import skill_directory
 
@@ -37,7 +38,7 @@ class SkillInstaller:
                 if target == source or os.path.lexists(str(target)):
                     continue
                 target.parent.mkdir(parents=True, exist_ok=True)
-                target.symlink_to(os.path.relpath(str(referent), str(target.parent)))
+                directory_link(target, referent)
         except OSError as error:
             raise ToolError("无法注册技能链接：" + str(error)) from error
         return dict(

@@ -5,11 +5,11 @@ description: 使用 ssh-runner 操作SSH 服务器，执行非交互命令和脚
 
 # SSH Runner
 
-通过本地 `ssh-runner` 调用系统 OpenSSH。支持 macOS/Linux、Python 3.8+、OpenSSH 8.7+，无需第三方 Python 运行依赖。
+通过本地 `ssh-runner` 调用系统 OpenSSH。支持 macOS/Linux/Windows 10/11 x64 客户端连接 Linux/macOS，Python 3.8+、OpenSSH 8.7+，无需第三方 Python 运行依赖。
 
 ## 定位工具与目标
 
-优先使用已安装的 `ssh-runner`；同一 Python 环境可用 `python -m ssh_runner`。未安装且已有源码时，在仓库根目录使用模块入口。安装或升级时读 [安装说明](references/installation.md)，普通远端任务无需重新安装。
+优先使用已安装的 `ssh-runner`；同一 Python 环境可用 `python -m ssh_runner`。未安装且已有源码时，POSIX 可在仓库根目录使用模块入口；Windows 密码认证需先安装（开发用 editable install）以生成 askpass.exe。安装或升级时读 [安装说明](references/installation.md)，普通远端任务无需重新安装。
 
 ```bash
 ssh-runner capabilities
@@ -17,7 +17,7 @@ ssh-runner config list
 ssh-runner --server dev config check
 ```
 
-以上操作不连接远端。根据 `data.servers` 选择用户所指服务，后续显式传 `--server`；目标有歧义时澄清。默认配置为 `~/.config/ssh-runner/config.json`，自定义路径用 `--config`，不从当前目录查找。
+以上操作不连接远端。根据 `data.servers` 选择用户所指服务，后续显式传 `--server`；目标有歧义时澄清。POSIX 默认配置为 `~/.config/ssh-runner/config.json`，Windows 为 `%LOCALAPPDATA%\ssh-runner\config.json`，自定义路径用 `--config`，不从当前目录查找。
 
 **根参数 `--config`、`--server`、`--format` 必须放在子命令之前。** 具体能力以 capabilities 和当前 --help 为准。
 
@@ -40,7 +40,7 @@ ssh-runner --server dev exec 'tail -n 100 logs/app.log' --cwd /srv/project
 ssh-runner --server dev script ./diagnose.sh --arg /srv/project --arg=--verbose
 ```
 
-默认 JSON；人工阅读在子命令前加 --format text。每次执行使用独立 shell，连接复用不保留 cd 或变量。没有 PTY，普通命令 stdin 默认 /dev/null；OTP、密码变更、私钥口令和交互程序交由用户使用交互 SSH。
+默认 JSON；人工阅读在子命令前加 --format text。每次执行使用独立 shell，连接复用不保留 cd 或变量。Windows 默认独立连接并允许并发；显式要求复用会报错，可用 --no-reuse。没有 PTY，普通命令 stdin 默认 /dev/null；OTP、密码变更、私钥口令和交互程序交由用户使用交互 SSH。
 
 ## 判断结果
 

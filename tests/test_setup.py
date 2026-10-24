@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest import mock
 
 from ssh_runner import ToolError
+from ssh_runner._platform import WINDOWS, directory_link
 from ssh_runner.resources import skill_directory
 from ssh_runner.services.skills import SkillInstaller
 
@@ -42,7 +43,9 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(primary.resolve(), self.source)
         self.assertEqual(claude.resolve(), self.source)
         for document in self.source.rglob("*.md"):
-            for reference in re.findall(r"\]\(([^)#]+)", document.read_text()):
+            for reference in re.findall(
+                r"\]\(([^)#]+)", document.read_text(encoding="utf-8")
+            ):
                 if "://" not in reference:
                     self.assertTrue(
                         (document.parent / reference).is_file(), (document, reference)
@@ -58,8 +61,9 @@ class SetupTests(unittest.TestCase):
                 elif kind == "directory":
                     target.mkdir()
                 else:
-                    target.symlink_to(
-                        self.home if kind == "wrong-link" else self.home / "missing"
+                    directory_link(
+                        target,
+                        self.home if kind == "wrong-link" else self.home / "missing",
                     )
                 before = target.lstat().st_ino
                 with self.assertRaises(ToolError):
@@ -75,7 +79,9 @@ class SetupTests(unittest.TestCase):
         with mock.patch.object(Path, "home", return_value=self.home):
             result = SkillInstaller().install()
         self.assertEqual(result["scope"], "user")
-        self.assertTrue((self.home / ".agents/skills/ssh-runner").is_symlink())
+        self.assertEqual(
+            (self.home / ".agents/skills/ssh-runner").resolve(), self.source
+        )
         with self.assertRaises(ToolError):
             SkillInstaller().install(scope="project")
         with self.assertRaises(ToolError):

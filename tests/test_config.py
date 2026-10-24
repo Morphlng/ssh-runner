@@ -9,6 +9,7 @@ from unittest import mock
 
 from ssh_runner import Config, ConfigStore, ToolError, cli
 from ssh_runner import config as config_module
+from ssh_runner._platform import WINDOWS, open_private, private_directory
 from ssh_runner.config import store as config
 
 
@@ -16,7 +17,8 @@ class ConfigTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.file = Path(self.temp.name) / "config.json"
+        self.file = Path(self.temp.name) / "private" / "config.json"
+        private_directory(self.file.parent)
         self.password = "test-only-$literal#secret"
         self.profile = {
             "host": "example.com",
@@ -27,12 +29,17 @@ class ConfigTests(unittest.TestCase):
         self.write()
 
     def write(self, data=None):
+        if not self.file.exists():
+            os.close(open_private(self.file, os.O_WRONLY | os.O_CREAT | os.O_EXCL))
         self.file.write_text(
             json.dumps(self.data if data is None else data, ensure_ascii=False),
             encoding="utf-8",
         )
         self.file.chmod(0o600)
 
+    @unittest.skipUnless(
+        os.name == "posix", "Windows uses LOCALAPPDATA, covered separately"
+    )
     def test_default_config_ignores_working_directory(self):
         with mock.patch.object(Path, "home", return_value=Path(self.temp.name)):
             self.assertEqual(
@@ -41,6 +48,10 @@ class ConfigTests(unittest.TestCase):
             )
             self.assertEqual(ConfigStore(self.file).path, self.file)
 
+    @unittest.skipUnless(
+        os.name == "posix",
+        "POSIX permission/link checks; Windows ACL tests are separate",
+    )
     def test_initialize_config_is_private_and_never_overwrites_files_or_symlinks(self):
         target = Path(self.temp.name) / "new" / "config.json"
         ConfigStore(target).initialize()
@@ -81,7 +92,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(loaded.password, self.password)
         self.assertNotIn(self.password, repr(loaded))
         self.assertNotIn(self.password, repr(ConfigStore(self.file).load()))
-        self.assertTrue(loaded.reuse_connection)
+        self.assertEqual(loaded.reuse_connection, not WINDOWS)
 
     def test_server_selection_never_silently_chooses_between_multiple_targets(self):
         self.data["servers"]["staging"] = {
@@ -227,6 +238,10 @@ class ConfigTests(unittest.TestCase):
                     Config("host", "user", 22, self.password, send_env=["APP"])
                 )
 
+    @unittest.skipUnless(
+        os.name == "posix",
+        "POSIX permission/link checks; Windows ACL tests are separate",
+    )
     def test_permissions_symlinks_owner_and_non_regular_files(self):
         self.file.chmod(0o644)
         with self.assertRaises(ToolError):

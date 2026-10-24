@@ -5,10 +5,10 @@ import os
 import re
 import shlex
 import stat
-import tempfile
 import uuid
 from pathlib import Path
 
+from .._platform import open_private, open_regular, private_temporary_file, publish_file
 from ..core.errors import ToolError
 from ..core.results import with_data
 from ..remote.archive import digest as _digest
@@ -50,11 +50,9 @@ class FileTransfer:
         if mode not in {"600", "640", "644", "700", "750", "755"}:
             raise ToolError("上传文件 mode 仅支持 600/640/644/700/750/755。")
         target = shlex.quote(remote_path(destination))
-        with tempfile.TemporaryFile() as snapshot:
+        with private_temporary_file() as snapshot:
             try:
-                with os.fdopen(
-                    os.open(str(local_path), os.O_RDONLY | os.O_NONBLOCK), "rb"
-                ) as source:
+                with os.fdopen(open_regular(local_path), "rb") as source:
                     if not stat.S_ISREG(os.fstat(source.fileno()).st_mode):
                         raise ToolError("上传源必须是普通文件。")
                     for chunk in iter(lambda: source.read(65536), b""):
@@ -112,13 +110,14 @@ printf '%%s\\n' '%s'
             if target.exists() and not overwrite:
                 raise ToolError("下载目标已存在；覆盖需要 overwrite。")
             try:
-                output = tempfile.NamedTemporaryFile(
-                    prefix=".ssh-download-", dir=target.parent, delete=False
+                candidate = target.parent / (".ssh-download-" + uuid.uuid4().hex)
+                output = os.fdopen(
+                    open_private(candidate, os.O_RDWR | os.O_CREAT | os.O_EXCL), "w+b"
                 )
+                temporary = candidate
             except OSError as error:
                 raise ToolError("无法创建本地下载临时文件。") from error
             with output:
-                temporary = Path(output.name)
                 marker = "SSH_RUNNER_HASH_" + uuid.uuid4().hex
                 script = """set -eu
     src=%s
@@ -140,13 +139,7 @@ printf '%%s\\n' '%s'
             if result.exit_code != 0:
                 return result
             try:
-                if overwrite:
-                    os.replace(temporary, target)
-                else:
-                    os.link(
-                        temporary, target
-                    )  # Atomic no-clobber, including dangling symlinks.
-                    temporary.unlink()
+                publish_file(temporary, target, overwrite)
             except OSError as error:
                 raise ToolError("下载文件提交失败；原目标未被部分下载覆盖。") from error
             temporary = None

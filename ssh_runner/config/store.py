@@ -4,9 +4,9 @@ import dataclasses
 import json
 import os
 import re
-import stat
 from pathlib import Path
 
+from .._platform import open_private, private_directory
 from ..core.defaults import default_config_path
 from ..core.errors import ConfigError
 from ..resources import resource_text
@@ -22,18 +22,16 @@ from .models import (
 
 def _read_private_file(path: Path) -> str:
     try:
-        fd = os.open(str(path), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        fd = open_private(path)
+    except PermissionError:
+        raise ConfigError(
+            "配置权限不安全：需当前用户拥有的私有普通文件 (POSIX 0600 / Windows restricted ACL)，不能是链接或 reparse point。"
+        ) from None
     except OSError:
         raise ConfigError("无法打开配置文件；请确认文件存在且不是符号链接。") from None
     try:
         with os.fdopen(fd, "rb") as handle:
             info = os.fstat(handle.fileno())
-            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
-                raise ConfigError("配置必须是当前用户拥有的普通文件。")
-            if info.st_mode & 0o077:
-                raise ConfigError(
-                    "配置文件权限过宽；请先执行 chmod 600 <config-file>。"
-                )
             if info.st_size > MAX_CONFIG_BYTES:
                 raise ConfigError("配置文件过大。")
             contents = handle.read(MAX_CONFIG_BYTES + 1)
@@ -92,10 +90,9 @@ class ConfigStore:
         path = self.path
         try:
             template = resource_text("config.example.json").encode("utf-8")
-            path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-            fd = os.open(
-                str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600
-            )
+            if not path.parent.exists():
+                private_directory(path.parent, parents=True)
+            fd = open_private(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
             with os.fdopen(fd, "wb") as handle:
                 handle.write(template)
         except FileExistsError:

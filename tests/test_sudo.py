@@ -19,6 +19,7 @@ from ssh_runner.config import store as config
 from ssh_runner.ssh.process import Capture
 
 
+@unittest.skipUnless(os.name == "posix", "POSIX process/multiplex regression suite")
 class SudoTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

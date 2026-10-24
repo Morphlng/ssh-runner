@@ -117,11 +117,26 @@ def main(argv=None):
 
 
 def run():
+    from .._platform import WINDOWS
+
+    if WINDOWS:
+        import msvcrt
+        import os
+
+        for stream in (sys.stdout, sys.stderr):
+            if hasattr(stream, "reconfigure"):
+                stream.reconfigure(encoding="utf-8", errors="replace", newline="\n")
+        if hasattr(sys.stdin, "fileno"):
+            msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
+
     def terminate(signum, frame):
         raise _Terminated()
 
     previous = signal.signal(signal.SIGTERM, terminate)
+    previous_break = signal.signal(signal.SIGBREAK, terminate) if WINDOWS else None
     try:
         return main()
     finally:
         signal.signal(signal.SIGTERM, previous)
+        if WINDOWS:
+            signal.signal(signal.SIGBREAK, previous_break)

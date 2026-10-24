@@ -4,7 +4,7 @@ Bug reports and pull requests are welcome. Describe the observed behavior, expec
 
 ## Development
 
-Use macOS/Linux, Python 3.8+ and OpenSSH 8.7+. Windows contributors can use WSL. The runtime depends only on the standard library and system OpenSSH; Paramiko is a test-only dependency.
+Use macOS/Linux or native Windows 10/11 x64, Python 3.8+ and OpenSSH 8.7+. Windows virtualenv executables are in `Scripts`, not `bin`; see [Windows development and acceptance](docs/windows.md). The runtime depends only on the standard library and system OpenSSH; Paramiko is a test-only dependency.
 
 ```bash
 python3 -m venv .venv
@@ -22,7 +22,7 @@ Integration tests use ephemeral localhost SSH servers and Unix sockets with disp
 
 Store local test/build/scan logs, reports and downloaded validation tools under `.validation/` (for example `.validation/tests.log` and `.validation/tools/`). This directory is ignored by Git and excluded from source distributions.
 
-Preserve Python 3.8 syntax and macOS/Linux behavior. Keep changes focused and add regression coverage for behavioral changes, especially authentication, isolation, host trust, transfers and process lifecycle. See [AGENTS.md](AGENTS.md) for architecture boundaries. Keep English/Chinese onboarding, skill references and configuration examples consistent.
+Preserve Python 3.8 syntax and macOS/Linux/Windows behavior. Keep changes focused and add regression coverage for behavioral changes, especially authentication, isolation, host trust, transfers and process lifecycle. See [AGENTS.md](AGENTS.md) for architecture boundaries. Keep English/Chinese onboarding, skill references and configuration examples consistent.
 
 ## Release preparation
 

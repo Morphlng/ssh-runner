@@ -98,6 +98,16 @@ if paramiko is not None:
             def finish():
                 # Let Paramiko send the exec-request acknowledgement first.
                 self.owner.stop.wait(0.03)
+                if command == "stdin-eof-test":
+                    import hashlib
+
+                    incoming = channel.makefile("rb").read()
+                    channel.sendall(
+                        (hashlib.sha256(incoming).hexdigest() + "\n").encode("ascii")
+                    )
+                    channel.send_exit_status(0)
+                    channel.close()
+                    return
                 if getattr(self.owner, "execute_shell", False):
                     incoming = channel.makefile("rb").read()
                     if getattr(self.owner, "corrupt_stdin", False):

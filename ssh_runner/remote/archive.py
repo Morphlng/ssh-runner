@@ -23,9 +23,10 @@ def digest(handle):
     return size, value.hexdigest()
 
 
-def pack_directory(source, output):
+def pack_directory(source, output, *, opener=None, inspect=None, windows=False):
+    inspect = inspect or (lambda path: path.lstat())
     source = Path(source)
-    if not stat.S_ISDIR(source.lstat().st_mode):
+    if not stat.S_ISDIR(inspect(source).st_mode):
         raise ValueError("source must be a real directory, not a symlink")
     count = 0
     total = 0
@@ -33,9 +34,13 @@ def pack_directory(source, output):
 
         def add(path, name):
             nonlocal count, total
-            info = path.lstat()
+            info = inspect(path)
             member = tarfile.TarInfo(name)
-            member.mode = stat.S_IMODE(info.st_mode) & 0o777
+            member.mode = (
+                (0o755 if stat.S_ISDIR(info.st_mode) else 0o644)
+                if windows
+                else stat.S_IMODE(info.st_mode) & 0o777
+            )
             member.mtime = info.st_mtime
             if stat.S_ISDIR(info.st_mode):
                 member.type = tarfile.DIRTYPE
@@ -44,7 +49,11 @@ def pack_directory(source, output):
                     add(child, child.name if name == "." else name + "/" + child.name)
             elif stat.S_ISREG(info.st_mode):
                 # Never block on FIFOs or follow a final symlink if the tree changes.
-                fd = os.open(str(path), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+                fd = (
+                    opener(path)
+                    if opener
+                    else os.open(str(path), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+                )
                 with os.fdopen(fd, "rb") as handle:
                     current = os.fstat(handle.fileno())
                     if not stat.S_ISREG(current.st_mode):
@@ -99,15 +108,28 @@ def publish_directory(staging, destination):
         raise OSError(error, os.strerror(error))
 
 
-def unpack_directory(handle, destination):
+def unpack_directory(
+    handle,
+    destination,
+    *,
+    member_key=None,
+    publish=None,
+    windows=False,
+    make_stage=None,
+):
     destination = Path(destination).absolute()
     if os.path.lexists(destination):
         raise ValueError(
             "directory destination already exists; merging/overwrite is not supported"
         )
-    stage = Path(tempfile.mkdtemp(prefix=".ssh-directory-", dir=destination.parent))
+    stage = Path(
+        make_stage(destination.parent)
+        if make_stage
+        else tempfile.mkdtemp(prefix=".ssh-directory-", dir=destination.parent)
+    )
     metadata = []
     seen = set()
+    aliases = {}
     count = total = 0
     try:
         with tarfile.open(fileobj=handle, mode="r:") as archive:
@@ -119,7 +141,16 @@ def unpack_directory(handle, destination):
                     raise ValueError(
                         "archive links and special/sparse files are not supported"
                     )
-                key = str(path)
+                key = member_key(member.name) if member_key else str(path)
+                if windows:
+                    # Reject aliases in implicit parents as well as full names:
+                    # A/file and a/other must not silently merge on Windows.
+                    for length in range(1, len(path.parts) + 1):
+                        spelling = "/".join(path.parts[:length])
+                        folded = spelling.casefold()
+                        if folded in aliases and aliases[folded] != spelling:
+                            raise ValueError("case-equivalent archive paths")
+                        aliases[folded] = spelling
                 if key in seen or (key == "." and not member.isdir()):
                     raise ValueError("duplicate or invalid archive path")
                 seen.add(key)
@@ -139,9 +170,10 @@ def unpack_directory(handle, destination):
         for target, mode, mtime in sorted(
             metadata, key=lambda item: len(item[0].parts), reverse=True
         ):
-            os.chmod(target, mode)
+            if not windows:
+                os.chmod(target, mode)
             os.utime(target, (mtime, mtime))
-        publish_directory(stage, destination)
+        (publish or publish_directory)(stage, destination)
         return {"files": count, "file_bytes": total, "path": str(destination)}
     finally:
         if stage.exists():

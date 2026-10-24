@@ -24,6 +24,7 @@ from ssh_runner.ssh.auth import get_policy
 MODULE_PATH = Path(__file__).resolve().parents[1] / "ssh_runner" / "__main__.py"
 
 
+@unittest.skipUnless(os.name == "posix", "POSIX process/multiplex regression suite")
 class SSHExecTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

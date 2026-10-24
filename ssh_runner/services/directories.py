@@ -3,10 +3,10 @@
 import dataclasses
 import os
 import tarfile
-import tempfile
 import uuid
 from pathlib import Path
 
+from .._platform import archive_options, private_temporary_file
 from ..core.errors import ToolError
 from ..core.results import redact, with_data
 from ..remote import archive
@@ -25,9 +25,9 @@ class DirectoryTransfer:
         """Publish the contents of a real directory at a new remote destination."""
         config = self.executor.config
         target = remote_path(destination)
-        with tempfile.TemporaryFile() as snapshot:
+        with private_temporary_file() as snapshot:
             try:
-                archive.pack_directory(local_path, snapshot)
+                archive.pack_directory(local_path, snapshot, **archive_options("pack"))
                 size, digest = archive.digest(snapshot)
             except (OSError, ValueError, tarfile.TarError) as error:
                 raise ToolError(
@@ -56,7 +56,7 @@ class DirectoryTransfer:
         if os.path.lexists(target):
             raise ToolError("目录下载目标已存在；目录传输不合并或覆盖现有目标。")
         marker = "SSH_RUNNER_HASH_" + uuid.uuid4().hex
-        with tempfile.TemporaryFile() as snapshot:
+        with private_temporary_file() as snapshot:
             result = self.files.receive_verified(
                 python_command(
                     remote_source("archive"),
@@ -72,7 +72,9 @@ class DirectoryTransfer:
             if result.exit_code != 0:
                 return dataclasses.replace(result, operation="directory.download")
             try:
-                data = archive.unpack_directory(snapshot, target)
+                data = archive.unpack_directory(
+                    snapshot, target, **archive_options("unpack")
+                )
             except (OSError, ValueError, tarfile.TarError) as error:
                 raise ToolError(
                     "目录解包或发布失败：" + redact(str(error), config.secrets)

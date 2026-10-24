@@ -1,6 +1,6 @@
 # Installation
 
-Requirements: macOS / Linux, Python 3.8+, system OpenSSH 8.7+. On Windows, use a WSL Linux environment, including Linux SSH configuration and credentials.
+Requirements: macOS / Linux / Windows 10/11 x64 clients, Python 3.8+, system OpenSSH 8.7+. Remote hosts are Linux/macOS. See [native Windows installation, ACLs and connection behavior](docs/windows.md). WSL remains a separate Linux environment with its own credentials.
 
 ## Source installation (available now)
 
@@ -31,7 +31,7 @@ ssh-runner skill install --claude
 ssh-runner skill install --scope project --project-dir /absolute/project --claude
 ```
 
-Skills link to the installed package's bundled resources. Keep the environment location stable; moving or deleting it breaks those links. Existing conflicting files/directories are never overwritten. The canonical source is `.agents/skills/ssh-runner`; there is no second source copy for another agent.
+Skills link to the installed package's bundled resources (directory junctions on Windows, symlinks on POSIX). Keep the environment location stable; moving or deleting it breaks those links. Existing conflicting files/directories are never overwritten. The canonical source is `.agents/skills/ssh-runner`; there is no second source copy for another agent.
 
 ## Configuration and upgrade
 

@@ -1,5 +1,6 @@
 import contextlib
 import dataclasses
+import os
 import socket
 import tempfile
 import time
@@ -16,6 +17,7 @@ from ssh_runner.config import store as config
 from ssh_runner.ssh import connection
 
 
+@unittest.skipUnless(os.name == "posix", "POSIX process/multiplex regression suite")
 class ConnectionTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="st-", dir="/tmp")

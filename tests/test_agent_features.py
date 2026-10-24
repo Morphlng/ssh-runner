@@ -4,6 +4,7 @@ import contextlib
 import dataclasses
 import io
 import json
+import os
 import shlex
 import sys
 import time
@@ -45,7 +46,10 @@ class CaptureTests(unittest.TestCase):
         self.assertEqual(capture.text, "前[REDACTED]后")
 
 
-@unittest.skipUnless(integration.paramiko is not None, "optional Paramiko unavailable")
+@unittest.skipUnless(
+    os.name == "posix" and integration.paramiko is not None,
+    "POSIX end-to-end suite requires Paramiko",
+)
 class AgentWorkflows(unittest.TestCase):
     def setUp(self):
         self.server = integration.OpenSSHIntegrationTests()

@@ -8,6 +8,7 @@ Use `ssh-runner capabilities` to discover commands without credentials or a netw
 - [Background jobs](.agents/skills/ssh-runner/references/jobs.md)
 - [Connection diagnostics](.agents/skills/ssh-runner/references/troubleshooting.md)
 - [Installation](INSTALL.md)
+- [Native Windows behavior](docs/windows.md)
 
 Select the user's intended named target with `config list` and pass `--server` explicitly. Global options go before the command. Do not print private configuration or ask for credentials in chat. Existing authorization governs operations; installing a skill does not expand authorization.
 

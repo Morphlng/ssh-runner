@@ -44,6 +44,7 @@ class ConfigCommand(Command):
                 port=config.port,
                 auth_mode=config.auth_mode,
                 reuse_connection=config.reuse_connection,
+                connection_mode="multiplex" if config.reuse_connection else "direct",
             )
         )
 
@@ -96,13 +97,24 @@ class CapabilitiesCommand(Command):
 
     def run(self, context, options):
         from ... import __version__
-        from ...core.defaults import DEFAULT_OUTPUT_BYTES
+        from ...core.defaults import (
+            DEFAULT_OUTPUT_BYTES,
+            WINDOWS,
+            default_reuse_connection,
+        )
         from ...ssh.auth.policies import POLICIES
 
         return result(
             dict(
                 version=__version__,
                 schema_version=1,
+                local_platform="windows" if WINDOWS else "posix",
+                connection=dict(
+                    reuse_supported=not WINDOWS,
+                    default_mode=(
+                        "multiplex" if default_reuse_connection() else "direct"
+                    ),
+                ),
                 operations=[
                     dict(name=c.operation, requirements=c.requirements)
                     for c in context.commands

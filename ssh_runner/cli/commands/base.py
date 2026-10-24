@@ -28,7 +28,9 @@ def remote_arguments(parser):
     parser.add_argument(
         "--timeout", type=float, default=COMMAND_TIMEOUT, help="单次 SSH 请求超时秒数"
     )
-    parser.add_argument("--control-dir", type=Path, help="共享连接控制目录")
+    parser.add_argument(
+        "--control-dir", type=Path, help="连接状态目录（复用模式包括控制 socket）"
+    )
     parser.add_argument("--no-reuse", action="store_true", help="本次使用独立短连接")
 
 

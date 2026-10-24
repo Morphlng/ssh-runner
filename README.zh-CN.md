@@ -4,7 +4,7 @@
 
 [English](README.md) · [认证配置](docs/authentication.md) · [Agent 指引](AGENT_GUIDE.md) · [贡献指南](CONTRIBUTING.md)
 
-支持 macOS / Linux、Python 3.8+、OpenSSH 8.7+。Windows 请在 WSL 中安装并使用 Linux OpenSSH；原生 Windows 暂不支持。
+支持 macOS / Linux / Windows 10/11 x64 客户端、Python 3.8+、OpenSSH 8.7+，远端为 Linux/macOS。Windows 可原生运行，默认使用并发独立连接；安装、ACL 和行为差异见 [Windows 说明](docs/windows.md)。
 
 ## 安装与开始使用
 
@@ -82,7 +82,7 @@ ssh-runner skill install --claude
 
 默认 JSON，`schema_version=1`；检查 `exit_code`、`timed_out`、`error_kind` 与截断标志。每条输出流默认预览 65536 字节，结构化结果在 `data`，远端输出在 `stdout/stderr`。`job follow` 输出 JSONL。后台任务启动成功只代表请求成功，仍需查询任务状态与最终退出码；回执丢失时查询原 ID。
 
-连接通过 ControlMaster 跨进程复用，失败不自动重试，命令不自动重放。超时与断线不保证远端停止，重试前核实状态和产物。每次调用使用独立 shell，不保留 cd/export；无 PTY、交互终端或端口转发。目录传输与任务要求远端 POSIX Python 3.8+。更详细的操作及 Python API 见 [英文 README](README.md) 和 [Agent 指引](AGENT_GUIDE.md)。
+macOS/Linux 通过 ControlMaster 跨进程复用，Windows 默认独立连接；失败不自动重试，命令不自动重放。超时与断线不保证远端停止，重试前核实状态和产物。每次调用使用独立 shell，不保留 cd/export；无 PTY、交互终端或端口转发。目录传输与任务要求远端 POSIX Python 3.8+。更详细的操作及 Python API 见 [英文 README](README.md) 和 [Agent 指引](AGENT_GUIDE.md)。
 
 本工具不是沙箱，远端账号可执行的操作都可能被 Agent 执行。请使用专用低权限账号、受限 sudoers 和可信 SSH 配置。同 UID 的 Agent 仍可读取配置、密钥和 agent socket；输出脱敏只覆盖配置的 SSH/sudo 密码，文件内容不脱敏。参见 [SECURITY.md](SECURITY.md)。
 

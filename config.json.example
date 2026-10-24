@@ -2,7 +2,6 @@
   "version": 1,
   "default_server": "dev",
   "defaults": {
-    "reuse_connection": true,
     "control_persist": 300,
     "server_alive_interval": 15,
     "server_alive_count_max": 3,

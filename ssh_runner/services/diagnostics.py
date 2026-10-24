@@ -3,10 +3,14 @@
 import dataclasses
 import re
 import shlex
+import subprocess
 
+from .._platform import WINDOWS, private_temporary_file
 from ..config import resolve_environment
+from ..config.checks import check_local_files
 from ..core.errors import ToolError
 from ..core.results import ExecutionResult, with_data
+from ..ssh.auth import windows_askpass
 
 PROBE = """printf 'SSH_RUNNER_DOCTOR_V1\\n'
 for tool in sh cat wc tr mktemp chmod ln mv sha256sum shasum; do
@@ -68,18 +72,57 @@ class Diagnostics:
                 {"checks": checks},
                 error_kind="config",
             )
+        stage = "openssh"
         try:
+            if WINDOWS:
+                stage = "local_permissions"
+                check_local_files(config)
+                checks.append({"stage": "local_permissions", "status": "ok"})
+                stage = "private_storage"
+                with private_temporary_file() as probe:
+                    probe.write(b"local ACL probe")
+                checks.append({"stage": "private_storage", "status": "ok"})
+                if config.auth_mode != "key":
+                    stage = "askpass"
+                    windows_askpass()
+                    checks.append({"stage": "askpass", "status": "ok"})
+                stage = "openssh"
+                version = self.executor.transport.process.run(
+                    [self.executor.transport.binary, "-V"],
+                    stdin=subprocess.DEVNULL,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=config.connect_timeout,
+                )
+                match = re.search(
+                    r"OpenSSH(?:_for_Windows)?_(\d+)\.(\d+)",
+                    (version.stdout or "") + (version.stderr or ""),
+                )
+                if (
+                    version.returncode
+                    or not match
+                    or tuple(map(int, match.groups())) < (8, 7)
+                ):
+                    raise ToolError("Windows 需要原生 OpenSSH 8.7+。", kind="openssh")
+                checks.append(
+                    {
+                        "stage": "connection_mode",
+                        "status": "ok",
+                        "mode": "direct",
+                        "reuse_supported": False,
+                    }
+                )
             self.executor.transport.resolve_config(config)
             checks.append({"stage": "openssh", "status": "ok"})
-        except ToolError as error:
-            checks.append(
-                {"stage": "openssh", "status": "failed", "detail": str(error)}
-            )
+        except (ToolError, OSError, subprocess.TimeoutExpired) as error:
+            checks.append({"stage": stage, "status": "failed", "detail": str(error)})
             return with_data(
                 ExecutionResult(2, False, "", ""),
                 "doctor",
                 {"checks": checks},
-                error_kind="openssh",
+                error_kind=stage,
             )
         try:
             result = self.executor.execute(

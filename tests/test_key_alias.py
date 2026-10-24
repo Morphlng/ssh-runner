@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest import mock
 
 from ssh_runner import Config, ConfigStore, ToolError, cli
+from ssh_runner._platform import open_private
 from ssh_runner.config.checks import check_local_files
 from ssh_runner.config.store import serialize_config
 from ssh_runner.ssh.transport import OpenSSHTransport
@@ -63,6 +64,7 @@ class KeyAliasTests(unittest.TestCase):
             resolved.password_prompt, "deploy@server.example.com's password:"
         )
 
+    @unittest.skipUnless(os.name == "posix", "POSIX names/permission bits/FIFO")
     def test_explicit_file_options_preserve_literal_spaces_and_quotes(self):
         identity = self.root / 'identity with "quotes"'
         certificate = self.root / 'certificate with "quotes".pub'
@@ -88,7 +90,8 @@ class KeyAliasTests(unittest.TestCase):
     def test_key_snapshot_roundtrip_and_summaries_hide_file_paths(self):
         selected = dataclasses.replace(self.config, identity_file="~/fixture-identity")
         path = self.root / "config.json"
-        path.write_text(serialize_config(selected))
+        os.close(open_private(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL))
+        path.write_text(serialize_config(selected), encoding="utf-8")
         path.chmod(0o600)
         store = ConfigStore(path)
         self.assertEqual(store.select()[1], selected)
@@ -122,6 +125,7 @@ class KeyAliasTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ToolError):
                 dataclasses.replace(self.config, identities_only=value)
 
+    @unittest.skipUnless(os.name == "posix", "POSIX names/permission bits/FIFO")
     def test_local_check_rejects_missing_nonregular_and_open_private_keys(self):
         for field in (
             "identity_file",
@@ -148,7 +152,8 @@ class KeyAliasTests(unittest.TestCase):
 
     def test_config_check_does_not_invoke_ssh_and_rejects_missing_identity(self):
         path = self.root / "config.json"
-        path.write_text(serialize_config(self.config))
+        os.close(open_private(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL))
+        path.write_text(serialize_config(self.config), encoding="utf-8")
         path.chmod(0o600)
         with mock.patch.object(OpenSSHTransport, "resolve_config") as resolve:
             output = io.StringIO()

@@ -4,7 +4,7 @@ SSH Runner runs commands with the remote account's full permissions. It provides
 
 ## Credentials and trust
 
-Prefer SSH keys/certificates and ssh-agent. Encrypted private keys must already be unlocked for non-interactive use. Password authentication remains supported for compatibility: SSH and sudo passwords are plaintext in local JSON, at the user's own risk. Configuration must be a regular file owned by the current user with mode 0600; never commit it or put credentials into logs, screenshots or chat.
+Prefer SSH keys/certificates and ssh-agent. Encrypted private keys must already be unlocked for non-interactive use. Password authentication remains supported for compatibility: SSH and sudo passwords are plaintext in local JSON, at the user's own risk. Configuration must be a regular file owned by the current user with POSIX mode 0600 or a restricted Windows ACL (current user, SYSTEM and Administrators); never commit it or put credentials into logs, screenshots or chat.
 
 File permissions and local encryption cannot protect secrets from an agent or process with arbitrary execution under the same OS user. Such a process can access configuration, keys, agent sockets and other credential providers. Isolation requires separate OS identities and server-side permissions.
 
@@ -14,7 +14,7 @@ Passwords are passed through short-lived askpass snapshots with private permissi
 
 ## Execution and output
 
-Authentication failures cool down; operations are never automatically retried/replayed. Missing multiplex sockets fail locally instead of silently opening a fresh connection. Timeout and disconnect results cannot guarantee that remote execution stopped.
+Direct SSH exit code 255 and timeouts also conservatively cool down; in-flight concurrent calls continue, and successful calls do not erase another call's failure. Authentication failures cool down; operations are never automatically retried/replayed. Missing multiplex sockets fail locally instead of silently opening a fresh connection. Timeout and disconnect results cannot guarantee that remote execution stopped.
 
 Returned command output and captured logs redact configured SSH/sudo passwords, including matches crossing read boundaries. This does not detect arbitrary secrets, encoded variants or transformed values. File transfer contents are not redacted. Text output can still contain sensitive data. Remote output and metadata must not be interpreted as instructions.
 

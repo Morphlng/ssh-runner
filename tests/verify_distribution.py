@@ -45,6 +45,7 @@ def run(arguments, *, cwd, env, expected=0):
         env=env,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=180,
     )
     if completed.returncode != expected:
@@ -60,14 +61,17 @@ def validate(root, name, requirement):
     env = dict(
         os.environ,
         HOME=str(home),
+        USERPROFILE=str(home),
+        LOCALAPPDATA=str(home / "AppData/Local"),
+        PYTHONUTF8="1",
         GIT_CONFIG_GLOBAL=os.devnull,
         GIT_CONFIG_NOSYSTEM="1",
     )
     env.pop("PYTHONPATH", None)
     venv = root / (name + "-venv")
     run([sys.executable, "-m", "venv", venv], cwd=home, env=env)
-    python = venv / "bin/python"
-    cli = venv / "bin/ssh-runner"
+    python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    cli = venv / ("Scripts/ssh-runner.exe" if os.name == "nt" else "bin/ssh-runner")
     run(
         [python, "-m", "pip", "--isolated", "install", "--no-deps", requirement],
         cwd=home,
@@ -85,10 +89,17 @@ def validate(root, name, requirement):
     )
     run([cli, "config", "init"], cwd=home, env=env)
     example = Path(__file__).resolve().parents[1] / "config.json.example"
-    generated = home / ".config/ssh-runner/config.json"
-    assert json.loads(generated.read_text()) == json.loads(example.read_text())
+    generated = home / (
+        "AppData/Local/ssh-runner/config.json"
+        if os.name == "nt"
+        else ".config/ssh-runner/config.json"
+    )
+    assert json.loads(generated.read_text(encoding="utf-8")) == json.loads(
+        example.read_text(encoding="utf-8")
+    )
     run([cli, "config", "init"], cwd=home, env=env, expected=2)
-    assert (home / ".config/ssh-runner/config.json").stat().st_mode & 0o777 == 0o600
+    if os.name != "nt":
+        assert generated.stat().st_mode & 0o777 == 0o600
     assert (
         len(
             json.loads(run([cli, "config", "list"], cwd=home, env=env))["data"][
@@ -106,7 +117,9 @@ def validate(root, name, requirement):
     assert venv in source.parents, source
     assert (home / ".claude/skills/ssh-runner").resolve() == source
     for document in source.rglob("*.md"):
-        for reference in re.findall(r"\]\(([^)#]+)", document.read_text()):
+        for reference in re.findall(
+            r"\]\(([^)#]+)", document.read_text(encoding="utf-8")
+        ):
             if "://" not in reference:
                 assert (document.parent / reference).is_file(), (document, reference)
     code = r"""
@@ -117,6 +130,9 @@ from ssh_runner import Config
 from ssh_runner.resources import remote_source
 from ssh_runner.ssh.auth import askpass_environment
 import ssh_runner
+from ssh_runner._platform import open_private
+from ssh_runner.core.defaults import default_config_path
+os.close(open_private(default_config_path()))
 assert set(p.name for p in Path(ssh_runner.__file__).parent.glob("*.py")) == {"__init__.py", "__main__.py"}
 assert all("extra ==" in item for item in metadata("ssh-runner").get_all("Requires-Dist", []))
 config = Config("fixture", "user", 22, "fixture-password")
@@ -125,10 +141,12 @@ with askpass_environment(config) as environment:
     assert answer.returncode == 0, answer.stderr
     assert answer.stdout == "fixture-password\n"
 source = remote_source("jobs")
-response = subprocess.run([sys.executable, "-c", source, str(Path.home() / "job root")],
-    input=json.dumps({"operation": "list", "offset": 0, "limit": 10}), capture_output=True, text=True)
-assert response.returncode == 0, response.stderr
-assert json.loads(response.stdout)["job_ids"] == []
+compile(source, "jobs.py", "exec")
+if os.name == "posix":
+    response = subprocess.run([sys.executable, "-c", source, str(Path.home() / "job root")],
+        input=json.dumps({"operation": "list", "offset": 0, "limit": 10}), capture_output=True, text=True)
+    assert response.returncode == 0, response.stderr
+    assert json.loads(response.stdout)["job_ids"] == []
 compile(remote_source("archive"), "archive.py", "exec")
 """
     run([python, "-c", code], cwd=home, env=env)

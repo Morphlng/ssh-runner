@@ -1,6 +1,6 @@
 # Authentication and SSH aliases
 
-All examples are server profiles nested under `servers` in a version-1 application configuration. Configuration is private (owner-only mode 0600). It is never discovered in the current directory: pass `--config ./config.json` explicitly.
+All examples are server profiles nested under `servers` in a version-1 application configuration. Configuration is private (POSIX mode 0600, or a restricted Windows ACL; see [Windows](windows.md)). It is never discovered in the current directory: pass `--config ./config.json` explicitly.
 
 ## Existing OpenSSH alias
 
@@ -31,7 +31,7 @@ OpenSSH normally reads `~/.ssh/config`, not `~/.ssh_config`. Either Include the 
 
 `ssh_config_file` maps to `ssh -F`; the custom file replaces the usual user file and follows OpenSSH's system-config/Include behavior. Configure needed includes yourself. It does not change host verification or permit arbitrary CLI SSH options. Config files and their includes/proxies are trusted executable local input.
 
-With WSL, use Linux paths and Linux SSH configuration/agent/known_hosts. Windows SSH configuration is not inherited automatically. Keep private JSON and keys inside the Linux home filesystem when mounted Windows files cannot enforce owner-only permissions.
+Native Windows uses its own SSH config and agent, and supports installed askpass launchers for password modes. With WSL, use Linux paths and Linux SSH configuration/agent/known_hosts. Windows SSH configuration is not inherited automatically. Keep private JSON and keys inside the Linux home filesystem when mounted Windows files cannot enforce owner-only permissions.
 
 ## Explicit identity and certificate
 

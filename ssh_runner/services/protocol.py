@@ -3,8 +3,8 @@
 import dataclasses
 import json
 import shlex
-import tempfile
 
+from .._platform import private_temporary_file
 from ..core.errors import ToolError
 
 MAX_RESPONSE_BYTES = 1024 * 1024
@@ -29,7 +29,7 @@ class RemoteProtocol:
         The private binary sink avoids mutating JSON escape sequences during transport
         redaction. Callers must sanitize parsed values before returning them to users.
         """
-        with tempfile.TemporaryFile() as payload:
+        with private_temporary_file() as payload:
             payload.write(json.dumps(request, ensure_ascii=False).encode("utf-8"))
             payload.seek(0)
             return self.receive(
@@ -43,7 +43,7 @@ class RemoteProtocol:
     def receive(self, command, **kwargs):
         """Receive private JSON while allowing callers to stream arbitrary stdin."""
         run = self.executor.execute
-        with tempfile.TemporaryFile() as response:
+        with private_temporary_file() as response:
             result = run(
                 command,
                 stdout_file=response,

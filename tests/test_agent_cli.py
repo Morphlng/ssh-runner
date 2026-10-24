@@ -171,6 +171,7 @@ class AgentCLITests(unittest.TestCase):
         self.assertEqual(out.getvalue(), "out")
         self.assertEqual(err.getvalue(), "err\n")
 
+    @unittest.skipUnless(os.name == "posix", "requires local POSIX shell/FIFO")
     def test_script_arguments_are_literal_and_all_services_share_executor(self):
         arguments = [
             "",
@@ -211,6 +212,7 @@ class AgentCLITests(unittest.TestCase):
         ):
             self.assertIs(service.executor, executor)
 
+    @unittest.skipUnless(os.name == "posix", "requires local POSIX shell/FIFO")
     def test_fifo_input_fails_before_authentication(self):
         with tempfile.TemporaryDirectory() as directory:
             fifo = Path(directory) / "input"

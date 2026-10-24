@@ -9,8 +9,8 @@ Run commands, scripts, file transfers and background jobs on named servers throu
 - SSH keys, ssh-agent, certificates, password and keyboard-interactive authentication.
 - OpenSSH Host aliases, custom SSH configuration files and jump hosts.
 - Strict host verification, bounded output, password redaction and atomic transfers.
-- Cross-process connection reuse through ControlMaster; failed commands are never automatically replayed.
-- macOS / Linux, Python 3.8+, OpenSSH 8.7+. Windows users need WSL and Linux OpenSSH.
+- Cross-process ControlMaster reuse on macOS/Linux; concurrent direct connections on native Windows. Failed commands are never automatically replayed.
+- macOS / Linux / Windows 10/11 x64 clients, Python 3.8+, OpenSSH 8.7+, with Linux/macOS remote hosts. See [Windows setup](docs/windows.md).
 
 SSH Runner executes commands with the remote account's permissions. Use dedicated accounts and least privilege. See [SECURITY.md](SECURITY.md) for credential handling and security boundaries.
 
@@ -55,7 +55,7 @@ ssh-runner --server remote-server exec 'hostname; id; pwd' --timeout 30
 
 `host` is passed unchanged to OpenSSH, so `HostName`, `User`, `Port`, `IdentityFile`, `ProxyJump` and trust settings come from the SSH configuration. Explicit `user` and `port` override those settings; leave them out to inherit. A file named `.ssh_config` is **not** an OpenSSH default: include it from `~/.ssh/config` or set `"ssh_config_file": "~/.ssh_config"` in the server profile. Only trusted SSH configuration files should be used.
 
-The default application configuration is always `~/.config/ssh-runner/config.json`. A project-local file requires an explicit path:
+The default application configuration is `~/.config/ssh-runner/config.json` on POSIX and `%LOCALAPPDATA%\ssh-runner\config.json` on Windows. A project-local file requires an explicit path:
 
 ```bash
 cp -n ./config.json.example ./config.json

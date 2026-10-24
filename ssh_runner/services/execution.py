@@ -4,18 +4,19 @@ import math
 import os
 import shlex
 import stat
-import tempfile
 from contextlib import ExitStack
 from functools import cached_property
 from pathlib import Path
 from typing import Optional
 
+from .._platform import open_regular, private_temporary_file
 from ..config import resolve_environment
 from ..core.defaults import COMMAND_TIMEOUT, DEFAULT_OUTPUT_BYTES
 from ..core.errors import ToolError
 from ..core.results import ExecutionResult
 from ..ssh.connection import ConnectionManager
-from ..ssh.transport import OpenSSHTransport, prompt_host
+from ..ssh.state import DirectConnection
+from ..ssh.transport import OpenSSHTransport
 
 
 def remote_path(path: str) -> str:
@@ -38,7 +39,12 @@ class CommandExecutor:
     @property
     def connection(self):
         if self._connection is None:
-            self._connection = ConnectionManager(
+            manager = (
+                ConnectionManager
+                if self.resolved_config.reuse_connection
+                else DirectConnection
+            )
+            self._connection = manager(
                 self.resolved_config,
                 control_dir=self.control_dir,
                 transport=self.transport,
@@ -92,7 +98,7 @@ class CommandExecutor:
                 # stream, including NOPASSWD/cached policies that consume no password.
                 body = "exec </dev/null\n" + command
                 if config.sudo_password:
-                    stdin = stack.enter_context(tempfile.TemporaryFile())
+                    stdin = stack.enter_context(private_temporary_file())
                     stdin.write(config.sudo_password.encode("utf-8") + b"\n")
                     stdin.seek(0)
                     command = "sudo -S -k -p '' -- sh -c " + shlex.quote(body)
@@ -100,11 +106,7 @@ class CommandExecutor:
                     command = "sudo -n -- sh -c " + shlex.quote(body)
             if isinstance(stdin, (str, Path)):
                 try:
-                    stdin = stack.enter_context(
-                        os.fdopen(
-                            os.open(str(stdin), os.O_RDONLY | os.O_NONBLOCK), "rb"
-                        )
-                    )
+                    stdin = stack.enter_context(os.fdopen(open_regular(stdin), "rb"))
                     if not stat.S_ISREG(os.fstat(stdin.fileno()).st_mode):
                         raise ToolError("stdin_file 必须是普通文件。")
                 except OSError:
@@ -124,11 +126,4 @@ class CommandExecutor:
                 return self.transport.run_command(
                     manager.config, command, timeout, manager.control_path, **kwargs
                 )
-            config, effective_settings = self.transport.resolve_config(config)
-            return self.transport.run_command(
-                config,
-                command,
-                timeout,
-                prompt_host=prompt_host(config, effective_settings),
-                **kwargs,
-            )
+            return self.connection.execute(command, timeout, **kwargs)
