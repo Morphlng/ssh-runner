@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security reporting
+    url: https://github.com/Morphlng/ssh-runner/blob/main/SECURITY.md
+    about: Do not report credentials or exploit details publicly.

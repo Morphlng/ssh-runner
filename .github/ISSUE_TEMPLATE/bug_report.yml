@@ -1,0 +1,23 @@
+name: Bug report
+description: Report a reproducible problem with fake credentials only.
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Observed and expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Remove host details, credentials and sensitive output.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python/OpenSSH versions and ssh-runner version.
+    validations:
+      required: true

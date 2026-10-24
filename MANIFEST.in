@@ -1,0 +1,11 @@
+include AGENTS.md AGENT_GUIDE.md INSTALL.md README.zh-CN.md SECURITY.md CONTRIBUTING.md
+include config.json.example
+recursive-include docs *.md
+recursive-include .agents/skills/ssh-runner *.md
+recursive-include tests *.py
+include tests/requirements.txt
+exclude config.json .ssh_config ssh_config OPEN_SOURCE_PLAN.md
+exclude .env .env.*
+prune .claude
+prune .validation
+include ssh_runner/resources/config.example.json

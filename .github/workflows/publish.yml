@@ -1,0 +1,74 @@
+name: Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: Package index (requires a configured Trusted Publisher and protected environment)
+        type: choice
+        required: true
+        default: testpypi
+        options: [testpypi, pypi]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ inputs.repository }}
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: '3.12'
+      - name: Validate release ref and package version
+        env:
+          PACKAGE_INDEX: ${{ inputs.repository }}
+        run: |
+          python - <<'PY'
+          import ast
+          import os
+          from pathlib import Path
+          tree = ast.parse(Path('ssh_runner/__init__.py').read_text())
+          version = next(ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == '__version__' for t in n.targets))
+          ref = os.environ['GITHUB_REF']
+          if os.environ['PACKAGE_INDEX'] == 'pypi':
+              assert ref == 'refs/tags/v' + version, 'PyPI requires a matching release tag'
+          else:
+              assert ref == 'refs/heads/main', 'TestPyPI builds must come from main'
+          PY
+          git merge-base --is-ancestor HEAD origin/main
+
+  checks:
+    needs: guard
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  publish:
+    needs: checks
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.repository }}
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: distributions
+          path: dist
+      - name: Publish to TestPyPI with OIDC
+        if: inputs.repository == 'testpypi'
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+      - name: Publish to PyPI with OIDC
+        if: inputs.repository == 'pypi'
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1

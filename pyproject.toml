@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ssh-runner"
+dynamic = ["version"]
+description = "Non-interactive SSH for AI agents: commands, transfers and background jobs"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {file = "LICENSE"}
+authors = [{name = "David Nie"}]
+dependencies = []
+classifiers = [
+    "Operating System :: POSIX",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+]
+
+[project.urls]
+Homepage = "https://github.com/Morphlng/ssh-runner"
+Repository = "https://github.com/Morphlng/ssh-runner"
+Issues = "https://github.com/Morphlng/ssh-runner/issues"
+
+[project.scripts]
+ssh-runner = "ssh_runner.cli:run"
+
+[project.optional-dependencies]
+test = ["paramiko>=3,<5"]
+dev = ["isort>=5,<6", "black>=24,<25", "build>=1,<2", "twine>=6,<7"]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.dynamic]
+version = {attr = "ssh_runner.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["ssh_runner*"]
+
+[tool.setuptools.package-data]
+"ssh_runner.resources" = ["config.example.json", "skills/ssh-runner/*.md", "skills/ssh-runner/references/*.md"]
+
+[tool.isort]
+profile = "black"
+
+[tool.black]
+target-version = ["py38"]

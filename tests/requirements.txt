@@ -1,0 +1,2 @@
+# Optional: only used by the local SSH protocol integration tests.
+paramiko>=3,<5

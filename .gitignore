@@ -150,6 +150,7 @@ activemq-data/
 *.sage.py
 
 # Environments
+.DS_Store
 .env
 .envrc
 .venv
@@ -201,7 +202,7 @@ cython_debug/
 #   can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
 #   and can be added to the global gitignore or merged into this file. However, if you prefer, you
 #   could uncomment the following to ignore the entire vscode folder
-# .vscode/
+.vscode/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
@@ -218,3 +219,14 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Private local SSH settings and credentials
+/config.json
+/.ssh_config
+/ssh_config
+/.claude/
+*.pem
+*.key
+
+# Local validation output
+/.validation/

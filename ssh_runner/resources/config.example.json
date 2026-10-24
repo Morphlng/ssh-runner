@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "default_server": "dev",
+  "defaults": {
+    "reuse_connection": true,
+    "control_persist": 300,
+    "server_alive_interval": 15,
+    "server_alive_count_max": 3,
+    "connect_timeout": 10,
+    "reconnect_delay": 5,
+    "ssh_binary": "ssh",
+    "remote_python": "python3",
+    "job_root": "~/.ssh-runner-jobs"
+  },
+  "servers": {
+    "dev": {
+      "host": "dev",
+      "auth_mode": "key"
+    },
+    "legacy": {
+      "host": "legacy.example.com",
+      "user": "alice",
+      "port": 22,
+      "auth_mode": "password",
+      "password": "",
+      "sudo_password": ""
+    }
+  }
+}
